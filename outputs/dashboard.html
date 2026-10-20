@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Housing Market Intelligence dashboard</title>
+<style>
+body{font-family:Arial,sans-serif;margin:2rem auto;padding:0 1rem;max-width:1100px;color:#0f172a;background:#f8fafc}
+section{background:white;padding:1rem 1.4rem;margin:1rem 0;border-radius:10px;box-shadow:0 1px 5px #cbd5e1}
+img{width:100%;height:auto}table{border-collapse:collapse;width:100%}th,td{padding:.55rem;border-bottom:1px solid #e2e8f0;text-align:left}
+.winner{font-size:1.2rem;color:#1d4ed8;font-weight:bold}
+</style></head><body>
+<h1>Housing Market Intelligence</h1>
+<p class="winner">Selected model by holdout MAE: Linear regression</p>
+<section><h2>Model metrics</h2><table class="dataframe metrics">
+  <thead>
+    <tr style="text-align: right;">
+      <th>model</th>
+      <th>mae</th>
+      <th>rmse</th>
+      <th>r2</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Linear regression</td>
+      <td>8505.901906</td>
+      <td>9995.415929</td>
+      <td>0.966770</td>
+    </tr>
+    <tr>
+      <td>Random forest</td>
+      <td>9092.653394</td>
+      <td>10481.109512</td>
+      <td>0.963462</td>
+    </tr>
+    <tr>
+      <td>Neural network</td>
+      <td>10933.590845</td>
+      <td>13068.219965</td>
+      <td>0.943199</td>
+    </tr>
+  </tbody>
+</table></section>
+<section><h2>Model comparison</h2><img src="charts/model_comparison.svg" alt="Model comparison chart"></section><section><h2>Holdout predictions</h2><img src="charts/holdout_predictions.svg" alt="Holdout predictions chart"></section><section><h2>Factor importance</h2><img src="charts/factor_importance.svg" alt="Factor importance chart"></section>
+<section><h2>Holdout predictions</h2><table class="dataframe predictions">
+  <thead>
+    <tr style="text-align: right;">
+      <th>date</th>
+      <th>area_id</th>
+      <th>market_name</th>
+      <th>price</th>
+      <th>Linear regression prediction</th>
+      <th>Random forest prediction</th>
+      <th>Neural network prediction</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2022-11-01</td>
+      <td>MARKET-A</td>
+      <td>North Example</td>
+      <td>230109.50</td>
+      <td>233219.270459</td>
+      <td>227691.39615</td>
+      <td>232563.068150</td>
+    </tr>
+    <tr>
+      <td>2022-11-01</td>
+      <td>MARKET-B</td>
+      <td>Coastal Example</td>
+      <td>271180.48</td>
+      <td>271242.032114</td>
+      <td>268848.71325</td>
+      <td>267913.800732</td>
+    </tr>
+    <tr>
+      <td>2022-11-01</td>
+      <td>MARKET-C</td>
+      <td>Central Example</td>
+      <td>311574.85</td>
+      <td>309264.793769</td>
+      <td>309580.87605</td>
+      <td>309094.510216</td>
+    </tr>
+    <tr>
+      <td>2022-11-01</td>
+      <td>MARKET-D</td>
+      <td>Lake Example</td>
+      <td>350958.58</td>
+      <td>347287.555424</td>
+      <td>349590.99715</td>
+      <td>351468.473724</td>
+    </tr>
+    <tr>
+      <td>2022-11-01</td>
+      <td>MARKET-E</td>
+      <td>Valley Example</td>
+      <td>389245.05</td>
+      <td>385310.317080</td>
+      <td>387875.06095</td>
+      <td>387915.052095</td>
+    </tr>
+    <tr>
+      <td>2022-12-01</td>
+      <td>MARKET-D</td>
+      <td>Lake Example</td>
+      <td>351407.75</td>
+      <td>347326.849710</td>
+      <td>349157.22560</td>
+      <td>351460.541895</td>
+    </tr>
+    <tr>
+      <td>2022-12-01</td>
+      <td>MARKET-C</td>
+      <td>Central Example</td>
+      <td>312234.97</td>
+      <td>309304.088055</td>
+      <td>309059.84880</td>
+      <td>307309.222310</td>
+    </tr>
+    <tr>
+      <td>2022-12-01</td>
+      <td>MARKET-E</td>
+      <td>Valley Example</td>
+      <td>389501.09</td>
+      <td>385349.611365</td>
+      <td>387543.68900</td>
+      <td>385164.572662</td>
+    </tr>
+    <tr>
+      <td>2022-12-01</td>
+      <td>MARKET-A</td>
+      <td>North Example</td>
+      <td>231014.43</td>
+      <td>233258.564744</td>
+      <td>227192.22665</td>
+      <td>235208.863217</td>
+    </tr>
+    <tr>
+      <td>2022-12-01</td>
+      <td>MARKET-B</td>
+      <td>Coastal Example</td>
+      <td>272009.12</td>
+      <td>271281.326400</td>
+      <td>268464.56370</td>
+      <td>268785.704978</td>
+    </tr>
+    <tr>
+      <td>2023-01-01</td>
+      <td>MARKET-A</td>
+      <td>North Example</td>
+      <td>231898.48</td>
+      <td>233137.955380</td>
+      <td>226705.54525</td>
+      <td>237484.821677</td>
+    </tr>
+    <tr>
+      <td>2023-01-01</td>
+      <td>MARKET-B</td>
+      <td>Coastal Example</td>
+      <td>272793.09</td>
+      <td>271160.717036</td>
+      <td>267956.81950</td>
+      <td>269184.301129</td>
+    </tr>
+    <tr>
+      <td>2023-01-01</td>
+      <td>MARKET-C</td>
+      <td>Central Example</td>
+      <td>312836.09</td>
+      <td>309183.478691</td>
+      <td>308810.98230</td>
+      <td>305252.423811</td>
+    </tr>
+    <tr>
+      <td>2023-01-01</td>
+      <td>MARKET-D</td>
+      <td>Lake Example</td>
+      <td>351796.60</td>
+      <td>347206.240346</td>
+      <td>348456.42460</td>
+      <td>349311.551245</td>
+    </tr>
+    <tr>
+      <td>2023-01-01</td>
+      <td>MARKET-E</td>
+      <td>Valley Example</td>
+      <td>389708.78</td>
+      <td>385229.002001</td>
+      <td>387120.14575</td>
+      <td>382171.084297</td>
+    </tr>
+    <tr>
+      <td>2023-02-01</td>
+      <td>MARKET-A</td>
+      <td>North Example</td>
+      <td>232756.11</td>
+      <td>232862.779635</td>
+      <td>226339.50280</td>
+      <td>239452.479649</td>
+    </tr>
+    <tr>
+      <td>2023-02-01</td>
+      <td>MARKET-B</td>
+      <td>Coastal Example</td>
+      <td>273528.50</td>
+      <td>270885.541291</td>
+      <td>267446.65745</td>
+      <td>269191.225974</td>
+    </tr>
+    <tr>
+      <td>2023-02-01</td>
+      <td>MARKET-C</td>
+      <td>Central Example</td>
+      <td>313377.02</td>
+      <td>308908.302946</td>
+      <td>308122.40480</td>
+      <td>304434.222762</td>
+    </tr>
+    <tr>
+      <td>2023-02-01</td>
+      <td>MARKET-D</td>
+      <td>Lake Example</td>
+      <td>352126.99</td>
+      <td>346931.064601</td>
+      <td>348057.58885</td>
+      <td>345206.825882</td>
+    </tr>
+    <tr>
+      <td>2023-02-01</td>
+      <td>MARKET-E</td>
+      <td>Valley Example</td>
+      <td>389872.66</td>
+      <td>384953.826256</td>
+      <td>386980.88780</td>
+      <td>379069.630556</td>
+    </tr>
+    <tr>
+      <td>2023-03-01</td>
+      <td>MARKET-E</td>
+      <td>Valley Example</td>
+      <td>389997.69</td>
+      <td>384508.917544</td>
+      <td>386730.58295</td>
+      <td>375756.278909</td>
+    </tr>
+    <tr>
+      <td>2023-03-01</td>
+      <td>MARKET-C</td>
+      <td>Central Example</td>
+      <td>313857.22</td>
+      <td>308463.394233</td>
+      <td>307831.86895</td>
+      <td>303326.447879</td>
+    </tr>
+    <tr>
+      <td>2023-03-01</td>
+      <td>MARKET-D</td>
+      <td>Lake Example</td>
+      <td>352401.39</td>
+      <td>346486.155889</td>
+      <td>347807.08530</td>
+      <td>339996.812073</td>
+    </tr>
+    <tr>
+      <td>2023-03-01</td>
+      <td>MARKET-A</td>
+      <td>North Example</td>
+      <td>233582.00</td>
+      <td>232417.870923</td>
+      <td>225987.99925</td>
+      <td>241576.373648</td>
+    </tr>
+    <tr>
+      <td>2023-03-01</td>
+      <td>MARKET-B</td>
+      <td>Coastal Example</td>
+      <td>274211.97</td>
+      <td>270440.632578</td>
+      <td>267123.11945</td>
+      <td>268559.207700</td>
+    </tr>
+    <tr>
+      <td>2023-04-01</td>
+      <td>MARKET-A</td>
+      <td>North Example</td>
+      <td>234371.11</td>
+      <td>231814.782750</td>
+      <td>225676.85025</td>
+      <td>243550.721977</td>
+    </tr>
+    <tr>
+      <td>2023-04-01</td>
+      <td>MARKET-B</td>
+      <td>Coastal Example</td>
+      <td>274840.67</td>
+      <td>269837.544405</td>
+      <td>266931.75220</td>
+      <td>268501.703639</td>
+    </tr>
+    <tr>
+      <td>2023-04-01</td>
+      <td>MARKET-C</td>
+      <td>Central Example</td>
+      <td>314276.78</td>
+      <td>307860.306060</td>
+      <td>307588.24865</td>
+      <td>301882.708098</td>
+    </tr>
+    <tr>
+      <td>2023-04-01</td>
+      <td>MARKET-D</td>
+      <td>Lake Example</td>
+      <td>352622.86</td>
+      <td>345883.067715</td>
+      <td>347674.40205</td>
+      <td>335084.316052</td>
+    </tr>
+    <tr>
+      <td>2023-04-01</td>
+      <td>MARKET-E</td>
+      <td>Valley Example</td>
+      <td>390089.20</td>
+      <td>383905.829370</td>
+      <td>386646.66125</td>
+      <td>371421.656677</td>
+    </tr>
+    <tr>
+      <td>2023-05-01</td>
+      <td>MARKET-D</td>
+      <td>Lake Example</td>
+      <td>352795.02</td>
+      <td>345103.549272</td>
+      <td>346991.57955</td>
+      <td>330619.285659</td>
+    </tr>
+    <tr>
+      <td>2023-05-01</td>
+      <td>MARKET-C</td>
+      <td>Central Example</td>
+      <td>314636.43</td>
+      <td>307080.787617</td>
+      <td>306813.96290</td>
+      <td>298760.504702</td>
+    </tr>
+    <tr>
+      <td>2023-05-01</td>
+      <td>MARKET-E</td>
+      <td>Valley Example</td>
+      <td>390152.84</td>
+      <td>383126.310927</td>
+      <td>386241.20195</td>
+      <td>367838.549184</td>
+    </tr>
+    <tr>
+      <td>2023-05-01</td>
+      <td>MARKET-A</td>
+      <td>North Example</td>
+      <td>235118.76</td>
+      <td>231035.264307</td>
+      <td>224704.24690</td>
+      <td>242913.636694</td>
+    </tr>
+    <tr>
+      <td>2023-05-01</td>
+      <td>MARKET-B</td>
+      <td>Coastal Example</td>
+      <td>275412.31</td>
+      <td>269058.025962</td>
+      <td>266044.71420</td>
+      <td>268522.201261</td>
+    </tr>
+    <tr>
+      <td>2023-06-01</td>
+      <td>MARKET-B</td>
+      <td>Coastal Example</td>
+      <td>278655.23</td>
+      <td>270320.884811</td>
+      <td>265277.09580</td>
+      <td>275779.995890</td>
+    </tr>
+    <tr>
+      <td>2023-06-01</td>
+      <td>MARKET-C</td>
+      <td>Central Example</td>
+      <td>317667.56</td>
+      <td>308343.646466</td>
+      <td>306250.47465</td>
+      <td>306003.607586</td>
+    </tr>
+    <tr>
+      <td>2023-06-01</td>
+      <td>MARKET-D</td>
+      <td>Lake Example</td>
+      <td>355652.00</td>
+      <td>346366.408121</td>
+      <td>346387.21810</td>
+      <td>343621.195827</td>
+    </tr>
+    <tr>
+      <td>2023-06-01</td>
+      <td>MARKET-E</td>
+      <td>Valley Example</td>
+      <td>392924.51</td>
+      <td>384389.169777</td>
+      <td>386543.26905</td>
+      <td>380836.591441</td>
+    </tr>
+    <tr>
+      <td>2023-06-01</td>
+      <td>MARKET-A</td>
+      <td>North Example</td>
+      <td>238550.69</td>
+      <td>232298.123156</td>
+      <td>224629.57065</td>
+      <td>242633.614260</td>
+    </tr>
+    <tr>
+      <td>2023-07-01</td>
+      <td>MARKET-A</td>
+      <td>North Example</td>
+      <td>239203.09</td>
+      <td>231209.216611</td>
+      <td>224374.13795</td>
+      <td>242280.780404</td>
+    </tr>
+    <tr>
+      <td>2023-07-01</td>
+      <td>MARKET-B</td>
+      <td>Coastal Example</td>
+      <td>279108.39</td>
+      <td>269231.978266</td>
+      <td>264999.07140</td>
+      <td>274360.273025</td>
+    </tr>
+    <tr>
+      <td>2023-07-01</td>
+      <td>MARKET-C</td>
+      <td>Central Example</td>
+      <td>317912.17</td>
+      <td>307254.739921</td>
+      <td>305720.68855</td>
+      <td>304154.116271</td>
+    </tr>
+    <tr>
+      <td>2023-07-01</td>
+      <td>MARKET-D</td>
+      <td>Lake Example</td>
+      <td>355738.37</td>
+      <td>345277.501576</td>
+      <td>345920.29675</td>
+      <td>341895.604605</td>
+    </tr>
+    <tr>
+      <td>2023-07-01</td>
+      <td>MARKET-E</td>
+      <td>Valley Example</td>
+      <td>392950.28</td>
+      <td>383300.263231</td>
+      <td>386309.65405</td>
+      <td>377520.683225</td>
+    </tr>
+    <tr>
+      <td>2023-08-01</td>
+      <td>MARKET-D</td>
+      <td>Lake Example</td>
+      <td>355789.15</td>
+      <td>344055.589406</td>
+      <td>345437.54415</td>
+      <td>340304.289649</td>
+    </tr>
+    <tr>
+      <td>2023-08-01</td>
+      <td>MARKET-E</td>
+      <td>Valley Example</td>
+      <td>392966.32</td>
+      <td>382078.351061</td>
+      <td>385992.33985</td>
+      <td>374467.725781</td>
+    </tr>
+    <tr>
+      <td>2023-08-01</td>
+      <td>MARKET-B</td>
+      <td>Coastal Example</td>
+      <td>279501.41</td>
+      <td>268010.066096</td>
+      <td>264595.02740</td>
+      <td>271652.582854</td>
+    </tr>
+    <tr>
+      <td>2023-08-01</td>
+      <td>MARKET-A</td>
+      <td>North Example</td>
+      <td>239802.69</td>
+      <td>229987.304441</td>
+      <td>224226.70030</td>
+      <td>240806.011462</td>
+    </tr>
+    <tr>
+      <td>2023-08-01</td>
+      <td>MARKET-C</td>
+      <td>Central Example</td>
+      <td>318102.89</td>
+      <td>306032.827751</td>
+      <td>304999.77400</td>
+      <td>302293.006271</td>
+    </tr>
+    <tr>
+      <td>2023-09-01</td>
+      <td>MARKET-A</td>
+      <td>North Example</td>
+      <td>240346.78</td>
+      <td>228614.135837</td>
+      <td>223650.98025</td>
+      <td>238851.857432</td>
+    </tr>
+    <tr>
+      <td>2023-09-01</td>
+      <td>MARKET-B</td>
+      <td>Coastal Example</td>
+      <td>279834.57</td>
+      <td>266636.897492</td>
+      <td>263809.59255</td>
+      <td>268799.563326</td>
+    </tr>
+    <tr>
+      <td>2023-09-01</td>
+      <td>MARKET-C</td>
+      <td>Central Example</td>
+      <td>318242.91</td>
+      <td>304659.659147</td>
+      <td>304070.82895</td>
+      <td>301041.727553</td>
+    </tr>
+    <tr>
+      <td>2023-09-01</td>
+      <td>MARKET-D</td>
+      <td>Lake Example</td>
+      <td>355809.69</td>
+      <td>342682.420802</td>
+      <td>344149.29925</td>
+      <td>338804.404351</td>
+    </tr>
+    <tr>
+      <td>2023-09-01</td>
+      <td>MARKET-E</td>
+      <td>Valley Example</td>
+      <td>392978.86</td>
+      <td>380705.182458</td>
+      <td>384948.75875</td>
+      <td>370757.195426</td>
+    </tr>
+    <tr>
+      <td>2023-10-01</td>
+      <td>MARKET-E</td>
+      <td>Valley Example</td>
+      <td>392994.09</td>
+      <td>379195.971799</td>
+      <td>383271.95575</td>
+      <td>367626.759721</td>
+    </tr>
+    <tr>
+      <td>2023-10-01</td>
+      <td>MARKET-C</td>
+      <td>Central Example</td>
+      <td>318335.98</td>
+      <td>303150.448488</td>
+      <td>303462.46060</td>
+      <td>300522.456179</td>
+    </tr>
+    <tr>
+      <td>2023-10-01</td>
+      <td>MARKET-D</td>
+      <td>Lake Example</td>
+      <td>355805.65</td>
+      <td>341173.210143</td>
+      <td>342813.29205</td>
+      <td>335673.544170</td>
+    </tr>
+    <tr>
+      <td>2023-10-01</td>
+      <td>MARKET-A</td>
+      <td>North Example</td>
+      <td>240833.29</td>
+      <td>227104.925178</td>
+      <td>223052.29270</td>
+      <td>236725.036352</td>
+    </tr>
+    <tr>
+      <td>2023-10-01</td>
+      <td>MARKET-B</td>
+      <td>Coastal Example</td>
+      <td>280108.80</td>
+      <td>265127.686833</td>
+      <td>263310.47090</td>
+      <td>268151.051430</td>
+    </tr>
+    <tr>
+      <td>2023-11-01</td>
+      <td>MARKET-A</td>
+      <td>North Example</td>
+      <td>241260.75</td>
+      <td>225491.470853</td>
+      <td>222569.74110</td>
+      <td>234357.294380</td>
+    </tr>
+    <tr>
+      <td>2023-11-01</td>
+      <td>MARKET-B</td>
+      <td>Coastal Example</td>
+      <td>280325.71</td>
+      <td>263514.232508</td>
+      <td>263002.37055</td>
+      <td>266956.452715</td>
+    </tr>
+    <tr>
+      <td>2023-11-01</td>
+      <td>MARKET-C</td>
+      <td>Central Example</td>
+      <td>318386.39</td>
+      <td>301536.994163</td>
+      <td>303292.88655</td>
+      <td>299656.423813</td>
+    </tr>
+    <tr>
+      <td>2023-11-01</td>
+      <td>MARKET-D</td>
+      <td>Lake Example</td>
+      <td>355782.93</td>
+      <td>339559.755818</td>
+      <td>342049.41460</td>
+      <td>333764.754614</td>
+    </tr>
+    <tr>
+      <td>2023-11-01</td>
+      <td>MARKET-E</td>
+      <td>Valley Example</td>
+      <td>393018.10</td>
+      <td>377582.517473</td>
+      <td>380724.33010</td>
+      <td>365520.918999</td>
+    </tr>
+    <tr>
+      <td>2023-12-01</td>
+      <td>MARKET-D</td>
+      <td>Lake Example</td>
+      <td>355747.60</td>
+      <td>337842.278603</td>
+      <td>341607.44560</td>
+      <td>331732.936158</td>
+    </tr>
+    <tr>
+      <td>2023-12-01</td>
+      <td>MARKET-A</td>
+      <td>North Example</td>
+      <td>241628.39</td>
+      <td>223773.993638</td>
+      <td>222086.94600</td>
+      <td>231894.699186</td>
+    </tr>
+    <tr>
+      <td>2023-12-01</td>
+      <td>MARKET-B</td>
+      <td>Coastal Example</td>
+      <td>280487.55</td>
+      <td>261796.755293</td>
+      <td>262804.12465</td>
+      <td>264961.273460</td>
+    </tr>
+    <tr>
+      <td>2023-12-01</td>
+      <td>MARKET-C</td>
+      <td>Central Example</td>
+      <td>318398.86</td>
+      <td>299819.516948</td>
+      <td>303035.36140</td>
+      <td>299811.865713</td>
+    </tr>
+    <tr>
+      <td>2023-12-01</td>
+      <td>MARKET-E</td>
+      <td>Valley Example</td>
+      <td>393056.81</td>
+      <td>375865.040259</td>
+      <td>378547.86530</td>
+      <td>365932.809711</td>
+    </tr>
+  </tbody>
+</table></section>
+<section><h2>Feature importance</h2><table class="dataframe importance">
+  <thead>
+    <tr style="text-align: right;">
+      <th>factor</th>
+      <th>importance_mean</th>
+      <th>importance_std</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>synthetic_region_index</td>
+      <td>55982.433496</td>
+      <td>1975.870789</td>
+    </tr>
+    <tr>
+      <td>inflation_rate</td>
+      <td>108.651625</td>
+      <td>18.938623</td>
+    </tr>
+    <tr>
+      <td>mortgage_rate</td>
+      <td>72.777669</td>
+      <td>44.673385</td>
+    </tr>
+    <tr>
+      <td>fuel_price</td>
+      <td>17.873043</td>
+      <td>18.463672</td>
+    </tr>
+    <tr>
+      <td>unemployment_rate</td>
+      <td>-69.448656</td>
+      <td>9.967979</td>
+    </tr>
+    <tr>
+      <td>interest_rate</td>
+      <td>-147.822498</td>
+      <td>23.170608</td>
+    </tr>
+  </tbody>
+</table></section>
+<p>Feature importance is predictive association, not proof of causation. Results are exploratory and depend on input data quality.</p>
+</body></html>

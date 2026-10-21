@@ -5,15 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 import pandas as pd
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.neural_network import MLPRegressor
-from sklearn.pipeline import Pipeline, make_pipeline
-from sklearn.compose import TransformedTargetRegressor
-from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
 
 from .preprocessing import chronological_split
 
@@ -23,26 +20,20 @@ def build_models() -> dict[str, object]:
     return {
         "Linear regression": make_pipeline(
             SimpleImputer(strategy="median", keep_empty_features=True),
-            StandardScaler(),
             LinearRegression(),
         ),
         "Random forest": make_pipeline(
             SimpleImputer(strategy="median", keep_empty_features=True),
             RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1),
         ),
-        "Neural network": TransformedTargetRegressor(
-            regressor=make_pipeline(
-                SimpleImputer(strategy="median", keep_empty_features=True),
-                StandardScaler(),
-                MLPRegressor(
-                    hidden_layer_sizes=(32, 16),
-                    max_iter=800,
-                    early_stopping=True,
-                    random_state=42,
-                    learning_rate_init=0.005,
-                ),
+        "Gradient boosting": make_pipeline(
+            SimpleImputer(strategy="median", keep_empty_features=True),
+            GradientBoostingRegressor(
+                n_estimators=120,
+                learning_rate=0.05,
+                max_depth=2,
+                random_state=42,
             ),
-            transformer=StandardScaler(),
         ),
     }
 

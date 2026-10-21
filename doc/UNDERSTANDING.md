@@ -26,8 +26,8 @@ cycles.
 - **Linear regression:** an interpretable linear baseline.
 - **Random forest:** an ensemble of decision trees that can model nonlinear
   relationships.
-- **Neural network:** a small feed-forward `MLPRegressor` with standardized
-  inputs.
+- **Gradient boosting:** a sequence of shallow decision trees that each
+  correct errors from the current ensemble.
 
 The table reports:
 

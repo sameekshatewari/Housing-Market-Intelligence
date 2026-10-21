@@ -23,26 +23,33 @@ def _svg_document(title: str, body: str, width: int = 900, height: int = 520) ->
 
 def make_charts(
     comparison: pd.DataFrame, holdout: pd.DataFrame, importance: pd.DataFrame,
-    target_column: str, output_dir: Path,
+    target_column: str, output_dir: Path, price_data: pd.Series | None = None,
 ) -> list[Path]:
     """Write self-contained SVG charts without a plotting-library dependency."""
     output_dir.mkdir(parents=True, exist_ok=True)
     created: list[Path] = []
 
-    max_mae = max(float(comparison["mae"].max()), 1.0)
+    max_error = max(float(comparison[["mae", "rmse"]].max().max()), 1.0)
     body = ""
     for index, row in comparison.reset_index(drop=True).iterrows():
-        y = 100 + index * 90
-        bar_width = 600 * float(row["mae"]) / max_mae
+        y = 105 + index * 110
         body += (
             f'<text x="40" y="{y + 28}" font-family="Arial" font-size="16" fill="#334155">'
             f'{html.escape(str(row["model"]))}</text>'
-            f'<rect x="250" y="{y}" width="{bar_width:.1f}" height="42" rx="6" fill="#2563eb"/>'
-            f'<text x="{260 + bar_width:.1f}" y="{y + 27}" font-family="Arial" font-size="14" '
-            f'fill="#0f172a">{float(row["mae"]):,.1f}</text>'
+            f'<rect x="250" y="{y}" width="{520 * float(row["mae"]) / max_error:.1f}" height="32" rx="5" fill="#2563eb"/>'
+            f'<rect x="250" y="{y + 39}" width="{520 * float(row["rmse"]) / max_error:.1f}" height="32" rx="5" fill="#f97316"/>'
+            f'<text x="780" y="{y + 22}" font-family="Arial" font-size="13" fill="#0f172a">{float(row["mae"]):,.0f}</text>'
+            f'<text x="780" y="{y + 61}" font-family="Arial" font-size="13" fill="#0f172a">{float(row["rmse"]):,.0f}</text>'
         )
+    body += (
+        '<rect x="300" y="455" width="18" height="18" fill="#2563eb"/>'
+        '<text x="326" y="470" font-family="Arial" font-size="14" fill="#334155">MAE (lower is better)</text>'
+        '<rect x="535" y="455" width="18" height="18" fill="#f97316"/>'
+        '<text x="561" y="470" font-family="Arial" font-size="14" fill="#334155">RMSE (lower is better)</text>'
+        '<text x="250" y="500" font-family="Arial" font-size="12" fill="#64748b">Error in price units</text>'
+    )
     path = output_dir / "model_comparison.svg"
-    path.write_text(_svg_document("Holdout MAE by model", body), encoding="utf-8")
+    path.write_text(_svg_document("Holdout model error comparison", body), encoding="utf-8")
     created.append(path)
 
     date_column = holdout.columns[0]
@@ -77,6 +84,101 @@ def make_charts(
     path.write_text(_svg_document("Observed and predicted holdout prices", body), encoding="utf-8")
     created.append(path)
 
+    target_values = (
+        price_data.astype(float) if price_data is not None
+        else holdout[target_column].astype(float)
+    )
+    low, high = float(target_values.min()), float(target_values.max())
+    span = max(high - low, 1.0)
+    bins = 16
+    counts = [0] * bins
+    for value in target_values:
+        index = min(int((float(value) - low) / span * bins), bins - 1)
+        counts[index] += 1
+    peak = max(counts + [1])
+    plot_x, plot_y, plot_w, plot_h = 100, 95, 740, 330
+    body = (
+        f'<line x1="{plot_x}" y1="{plot_y + plot_h}" x2="{plot_x + plot_w}" '
+        f'y2="{plot_y + plot_h}" stroke="#64748b"/>'
+        f'<line x1="{plot_x}" y1="{plot_y}" x2="{plot_x}" y2="{plot_y + plot_h}" stroke="#64748b"/>'
+    )
+    slot = plot_w / bins
+    for index, count in enumerate(counts):
+        height = plot_h * count / peak
+        x = plot_x + index * slot + 2
+        y = plot_y + plot_h - height
+        body += (
+            f'<rect x="{x:.1f}" y="{y:.1f}" width="{slot - 4:.1f}" height="{height:.1f}" '
+            'fill="#0ea5e9" stroke="#f8fafc"/>'
+        )
+    for fraction, anchor in ((0, "start"), (0.5, "middle"), (1, "end")):
+        value = low + span * fraction
+        x = plot_x + plot_w * fraction
+        body += (
+            f'<text x="{x:.1f}" y="455" text-anchor="{anchor}" font-family="Arial" '
+            f'font-size="13" fill="#334155">{value:,.0f}</text>'
+        )
+    body += (
+        f'<text x="28" y="{plot_y + 10}" font-family="Arial" font-size="12" fill="#334155">{peak}</text>'
+        f'<text x="28" y="{plot_y + plot_h}" font-family="Arial" font-size="12" fill="#334155">0</text>'
+        f'<text x="{plot_x + plot_w / 2:.1f}" y="490" text-anchor="middle" font-family="Arial" '
+        f'font-size="14" fill="#334155">{html.escape(target_column)}</text>'
+        f'<text x="35" y="260" transform="rotate(-90 35 260)" font-family="Arial" '
+        'font-size="14" fill="#334155">Observations</text>'
+    )
+    path = output_dir / "price_distribution.svg"
+    path.write_text(_svg_document("Housing price distribution (all observations)", body), encoding="utf-8")
+    created.append(path)
+
+    best_model_name = str(comparison.iloc[0]["model"])
+    predicted_column = f"{best_model_name} prediction"
+    actual = holdout[target_column].astype(float)
+    predicted = holdout[predicted_column].astype(float)
+    low = min(float(actual.min()), float(predicted.min()))
+    high = max(float(actual.max()), float(predicted.max()))
+    span = max(high - low, 1.0)
+    plot_x, plot_y, plot_w, plot_h = 245, 80, 390, 390
+    body = (
+        f'<line x1="{plot_x}" y1="{plot_y + plot_h}" x2="{plot_x + plot_w}" '
+        f'y2="{plot_y + plot_h}" stroke="#64748b"/>'
+        f'<line x1="{plot_x}" y1="{plot_y}" x2="{plot_x}" y2="{plot_y + plot_h}" stroke="#64748b"/>'
+    )
+    equal_start = plot_y + plot_h - plot_h * (low - low) / span
+    equal_end = plot_y + plot_h - plot_h * (high - low) / span
+    body += (
+        f'<line x1="{plot_x}" y1="{equal_start:.1f}" x2="{plot_x + plot_w}" '
+        f'y2="{equal_end:.1f}" stroke="#64748b" stroke-dasharray="8 6" stroke-width="2"/>'
+    )
+    for actual_value, predicted_value in zip(actual, predicted):
+        x = plot_x + plot_w * (float(actual_value) - low) / span
+        y = plot_y + plot_h - plot_h * (float(predicted_value) - low) / span
+        body += f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4" fill="#2563eb" fill-opacity=".7"/>'
+    for fraction, anchor in ((0, "start"), (0.5, "middle"), (1, "end")):
+        value = low + span * fraction
+        x = plot_x + plot_w * fraction
+        y = plot_y + plot_h + 18
+        y_tick = plot_y + plot_h - plot_h * fraction
+        body += (
+            f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="{anchor}" font-family="Arial" '
+            f'font-size="12" fill="#334155">{value:,.0f}</text>'
+            f'<text x="{plot_x - 10}" y="{y_tick + 4:.1f}" text-anchor="end" '
+            f'font-family="Arial" font-size="12" fill="#334155">{value:,.0f}</text>'
+        )
+    body += (
+        f'<text x="{plot_x + plot_w / 2:.1f}" y="515" text-anchor="middle" font-family="Arial" '
+        'font-size="14" fill="#334155">Actual price</text>'
+        f'<text x="32" y="260" transform="rotate(-90 32 260)" font-family="Arial" '
+        'font-size="14" fill="#334155">Predicted price</text>'
+        f'<text x="120" y="65" font-family="Arial" font-size="13" fill="#334155">'
+        f'Best by MAE: {html.escape(best_model_name)} (dashed line = perfect prediction)</text>'
+    )
+    path = output_dir / "predicted_vs_actual.svg"
+    path.write_text(
+        _svg_document("Predicted versus actual holdout prices", body, height=550),
+        encoding="utf-8",
+    )
+    created.append(path)
+
     factors = importance.sort_values("importance_mean", ascending=True).reset_index(drop=True)
     max_abs = max(float(factors["importance_mean"].abs().max()), 1.0)
     body = ""
@@ -109,8 +211,10 @@ def make_dashboard(
 ) -> Path:
     """Create a portable HTML dashboard containing the generated charts and score tables."""
     chart_links = [
-        ("Model comparison", "model_comparison.svg"),
+        ("Model errors", "model_comparison.svg"),
         ("Holdout predictions", "holdout_predictions.svg"),
+        ("Price distribution", "price_distribution.svg"),
+        ("Predicted versus actual", "predicted_vs_actual.svg"),
         ("Factor importance", "factor_importance.svg"),
     ]
     figures = "".join(
@@ -154,11 +258,22 @@ def save_results(
         "target_column": target_column,
         "features": features,
         "best_model_by_mae": results["best_model_name"],
+        "training_rows": int(len(results["train"])),
+        "holdout_rows": int(len(results["test"])),
+        "training_start": str(results["train"][date_column].min().date()),
+        "training_end": str(results["train"][date_column].max().date()),
         "holdout_start": str(results["holdout"][date_column].min().date()),
+        "holdout_end": str(results["holdout"][date_column].max().date()),
     }
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    make_charts(results["comparison"], results["holdout"], results["importance"], target_column,
-                output_dir / "charts")
+    all_prices = pd.concat(
+        [results["train"][target_column], results["test"][target_column]],
+        ignore_index=True,
+    )
+    make_charts(
+        results["comparison"], results["holdout"], results["importance"],
+        target_column, output_dir / "charts", price_data=all_prices,
+    )
     make_dashboard(results["comparison"], results["holdout"], results["importance"],
                    output_dir, results["best_model_name"])
     with closing(sqlite3.connect(output_dir / "housing_analysis.sqlite")) as connection:

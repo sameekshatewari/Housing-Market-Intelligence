@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 import sqlite3
+import xml.etree.ElementTree as ElementTree
 from argparse import Namespace
 from contextlib import closing
 from pathlib import Path
@@ -25,6 +26,15 @@ from housing_market_intelligence.sample_data import generate_sample_data
 
 
 class PreprocessingTests(unittest.TestCase):
+    def test_sample_data_generation_is_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first, second = root / "first", root / "second"
+            generate_sample_data(first, periods=6)
+            generate_sample_data(second, periods=6)
+            for path in first.glob("*.csv"):
+                self.assertEqual(path.read_bytes(), (second / path.name).read_bytes())
+
     def test_joins_macro_and_area_data_and_drops_invalid_targets(self) -> None:
         housing = pd.DataFrame(
             {"date": ["2024-01-01", "2024-02-01", "invalid"], "area_id": ["A", "A", "A"],
@@ -97,11 +107,41 @@ class EndToEndTests(unittest.TestCase):
             output = root / "outputs"
             summary = save_results(results, "date", "price", features, output)
 
-            self.assertEqual(len(results["comparison"]), 3)
+            self.assertEqual(
+                set(results["comparison"]["model"]),
+                {"Linear regression", "Random forest", "Gradient boosting"},
+            )
             self.assertEqual(len(results["importance"]), len(features))
+            self.assertEqual(
+                list(results["comparison"].columns), ["model", "mae", "rmse", "r2"]
+            )
+            self.assertEqual(
+                len(
+                    [
+                        column
+                        for column in results["holdout"].columns
+                        if column.endswith(" prediction")
+                    ]
+                ),
+                3,
+            )
+            self.assertLess(results["train"]["date"].max(), results["test"]["date"].min())
             self.assertEqual(summary["best_model_by_mae"], results["comparison"].iloc[0]["model"])
+            self.assertEqual(
+                summary["training_rows"] + summary["holdout_rows"], len(prepared)
+            )
             self.assertTrue((output / "model_comparison.csv").is_file())
-            self.assertTrue((output / "charts" / "holdout_predictions.svg").is_file())
+            for chart_name in (
+                "holdout_predictions.svg",
+                "model_comparison.svg",
+                "price_distribution.svg",
+                "predicted_vs_actual.svg",
+                "factor_importance.svg",
+            ):
+                chart = output / "charts" / chart_name
+                self.assertTrue(chart.is_file(), chart_name)
+                ElementTree.parse(chart)
+            self.assertTrue((output / "charts" / "factor_importance.svg").is_file())
             self.assertTrue((output / "dashboard.html").is_file())
             with closing(sqlite3.connect(output / "housing_analysis.sqlite")) as connection:
                 count = connection.execute("SELECT COUNT(*) FROM model_metrics").fetchone()[0]

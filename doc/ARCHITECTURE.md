@@ -26,8 +26,8 @@ launch_gui.py -> gui.HousingApp -> cli.execute
 - `preprocessing.py` validates and cleans housing rows, optionally joins macro
   observations by date and market metadata by `area_id`, creates chronological
   train/holdout partitions, and offers monthly aggregation.
-- `models.py` defines the linear regression, random forest, and scaled
-  feed-forward neural-network pipelines; calculates holdout metrics; ranks
+- `models.py` defines the linear regression, random forest, and gradient
+  boosting pipelines; calculates holdout metrics; ranks
   permutation importance; and refits the selected model on the full historical
   dataset for optional future scoring.
 - `reports.py` writes tabular and JSON results, constructs standalone SVG

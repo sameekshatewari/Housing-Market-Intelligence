@@ -10,5 +10,10 @@
     "synthetic_region_index"
   ],
   "best_model_by_mae": "Linear regression",
-  "holdout_start": "2022-11-01"
+  "training_rows": 290,
+  "holdout_rows": 70,
+  "training_start": "2018-01-01",
+  "training_end": "2022-10-01",
+  "holdout_start": "2022-11-01",
+  "holdout_end": "2023-12-01"
 }

@@ -1,156 +1,270 @@
 from __future__ import annotations
 
+import sqlite3
 import sys
 import tempfile
 import unittest
-import sqlite3
 import xml.etree.ElementTree as ElementTree
 from argparse import Namespace
 from contextlib import closing
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from housing_market_intelligence.models import evaluate_models
-from housing_market_intelligence.cli import execute
+from housing_market_intelligence.cli import DATASET_NAME, execute
+from housing_market_intelligence.models import BASELINE_NAMES, evaluate_models
 from housing_market_intelligence.preprocessing import (
+    DATE_COLUMN,
+    FORECAST_FEATURES,
+    TARGET_COLUMN,
     aggregate_monthly,
     chronological_split,
+    load_zhvi_csv,
     prepare_data,
 )
-from housing_market_intelligence.reports import save_results
-from housing_market_intelligence.sample_data import generate_sample_data
 
 
-class PreprocessingTests(unittest.TestCase):
-    def test_sample_data_generation_is_deterministic(self) -> None:
+def make_wide_zhvi(months: int = 48) -> pd.DataFrame:
+    dates = pd.date_range(
+        "2019-01-31", periods=months, freq=pd.offsets.MonthEnd()
+    )
+    rows: list[dict[str, object]] = [
+        {
+            "RegionID": 0,
+            "SizeRank": 0,
+            "RegionName": "United States",
+            "RegionType": "country",
+            "StateName": "",
+        }
+    ]
+    for region_index, (name, state) in enumerate(
+        (("Metro One, ST", "ST"), ("Metro Two, XY", "XY"), ("Metro Three, ZZ", "ZZ"))
+    ):
+        row: dict[str, object] = {
+            "RegionID": region_index + 1,
+            "SizeRank": region_index + 1,
+            "RegionName": name,
+            "RegionType": "msa",
+            "StateName": state,
+        }
+        for month_index, date in enumerate(dates):
+            value = (
+                180_000
+                + region_index * 55_000
+                + month_index * (700 + region_index * 70)
+                + 900 * np.sin(month_index / 4)
+            )
+            row[date.strftime("%Y-%m-%d")] = round(value, 2)
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+class ZillowPreprocessingTests(unittest.TestCase):
+    def test_wide_zhvi_csv_is_melted_and_non_metro_rows_are_excluded(self) -> None:
+        wide = make_wide_zhvi(months=16)
+        wide.loc[1, "2019-06-30"] = np.nan
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "zhvi.csv"
+            wide.to_csv(path, index=False)
+            tidy = load_zhvi_csv(path)
+
+        self.assertEqual(
+            list(tidy.columns), ["RegionName", "StateName", "Date", "HomeValue"]
+        )
+        self.assertEqual(tidy["RegionName"].nunique(), 3)
+        self.assertNotIn("United States", set(tidy["RegionName"]))
+        self.assertEqual(len(tidy), 3 * 16 - 1)
+        self.assertTrue(pd.api.types.is_datetime64_any_dtype(tidy["Date"]))
+        self.assertFalse(tidy["HomeValue"].isna().any())
+
+    def test_loader_reports_missing_file_and_unexpected_headers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            first, second = root / "first", root / "second"
-            generate_sample_data(first, periods=6)
-            generate_sample_data(second, periods=6)
-            for path in first.glob("*.csv"):
-                self.assertEqual(path.read_bytes(), (second / path.name).read_bytes())
+            with self.assertRaisesRegex(FileNotFoundError, "data/zhvi_metro.csv"):
+                load_zhvi_csv(root / "missing.csv")
+            invalid = root / "invalid.csv"
+            pd.DataFrame({"market": ["Example"], "2024-01-31": [100]}).to_csv(
+                invalid, index=False
+            )
+            with self.assertRaisesRegex(ValueError, "RegionName"):
+                load_zhvi_csv(invalid)
 
-    def test_joins_macro_and_area_data_and_drops_invalid_targets(self) -> None:
-        housing = pd.DataFrame(
-            {"date": ["2024-01-01", "2024-02-01", "invalid"], "area_id": ["A", "A", "A"],
-             "price": [100.0, 110.0, 120.0]}
+    def test_lags_use_prior_months_of_the_same_metro(self) -> None:
+        tidy = load_zhvi_csv_from_frame(make_wide_zhvi())
+        prepared = prepare_data(tidy)
+        row = prepared.loc[
+            (prepared["RegionName"] == "Metro One, ST")
+            & (prepared[DATE_COLUMN] == pd.Timestamp("2020-02-29"))
+        ].iloc[0]
+        self.assertAlmostEqual(
+            row["lag_1"],
+            180_000 + 12 * 700 + 900 * np.sin(12 / 4),
+            places=2,
         )
-        macro = pd.DataFrame({"date": ["2024-01-01", "2024-02-01"], "rate": [2.0, 3.0]})
-        areas = pd.DataFrame({"area_id": ["A"], "market_name": ["Example"]})
-        result = prepare_data(housing, "date", "price", ["rate"], macro, areas)
-        self.assertEqual(len(result), 2)
-        self.assertEqual(result.loc[0, "market_name"], "Example")
-        self.assertEqual(result["rate"].tolist(), [2.0, 3.0])
+        prior_year = tidy.loc[
+            (tidy["RegionName"] == "Metro One, ST")
+            & (tidy[DATE_COLUMN] == pd.Timestamp("2019-02-28")),
+            TARGET_COLUMN,
+        ].iloc[0]
+        self.assertAlmostEqual(row["lag_12"], prior_year)
+        thirteen_months_prior = tidy.loc[
+            (tidy["RegionName"] == "Metro One, ST")
+            & (tidy[DATE_COLUMN] == pd.Timestamp("2019-01-31")),
+            TARGET_COLUMN,
+        ].iloc[0]
+        self.assertAlmostEqual(
+            row["year_over_year_growth"],
+            row["lag_1"] / thirteen_months_prior - 1,
+        )
+        self.assertEqual(list(FORECAST_FEATURES), [
+            "lag_1", "lag_3", "lag_6", "lag_12",
+            "year_over_year_growth", "month_sin", "month_cos",
+        ])
 
-    def test_rejects_missing_feature(self) -> None:
-        with self.assertRaisesRegex(ValueError, "Feature columns are missing"):
-            prepare_data(pd.DataFrame({"date": ["2024-01-01"], "price": [1]}),
-                         "date", "price", ["unknown"])
-
-    def test_chronological_split_keeps_identical_dates_together(self) -> None:
+    def test_monthly_aggregation_can_keep_markets_separate(self) -> None:
         frame = pd.DataFrame(
-            {"date": pd.to_datetime(["2024-01-01", "2024-01-01", "2024-02-01",
-                                     "2024-03-01", "2024-04-01"]),
-             "price": [1, 2, 3, 4, 5]}
+            {
+                "Date": ["2024-01-03", "2024-01-24", "2024-01-15"],
+                "RegionName": ["Metro A", "Metro A", "Metro B"],
+                "HomeValue": [100.0, 200.0, 300.0],
+            }
         )
-        train, test = chronological_split(frame, "date", 0.6)
-        self.assertLess(train["date"].max(), test["date"].min())
+        result = aggregate_monthly(frame, group_column="RegionName")
+        values = dict(zip(result["RegionName"], result["HomeValue"]))
+        self.assertEqual(values, {"Metro A": 150.0, "Metro B": 300.0})
 
-    def test_monthly_aggregation(self) -> None:
-        frame = pd.DataFrame(
-            {"date": ["2024-01-01", "2024-01-20", "2024-02-01"], "price": [10, 20, 30]}
+    def test_chronological_split_keeps_all_markets_for_each_month_together(self) -> None:
+        prepared = prepare_data(load_zhvi_csv_from_frame(make_wide_zhvi()))
+        train, validation, test = chronological_split(prepared)
+        self.assertLess(train[DATE_COLUMN].max(), validation[DATE_COLUMN].min())
+        self.assertLess(validation[DATE_COLUMN].max(), test[DATE_COLUMN].min())
+        self.assertEqual(
+            set(train[DATE_COLUMN])
+            | set(validation[DATE_COLUMN])
+            | set(test[DATE_COLUMN]),
+            set(prepared[DATE_COLUMN]),
         )
-        result = aggregate_monthly(frame, "date", "price")
-        self.assertEqual(result["price"].tolist(), [15.0, 30.0])
 
 
-class EndToEndTests(unittest.TestCase):
-    def test_cli_joins_separate_sources_and_writes_forecasts(self) -> None:
+def load_zhvi_csv_from_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "zhvi.csv"
+        frame.to_csv(path, index=False)
+        return load_zhvi_csv(path)
+
+
+class ForecastWorkflowTests(unittest.TestCase):
+    def test_cli_runs_models_and_writes_reports_and_sqlite(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            data_dir = root / "data"
-            generate_sample_data(data_dir, periods=36)
+            source_path = root / "zhvi.csv"
+            make_wide_zhvi().to_csv(source_path, index=False)
             output = root / "outputs"
             summary = execute(
                 Namespace(
-                    data=data_dir / "housing_prices.csv",
-                    date_column="date",
-                    target_column="price",
-                    features="inflation_rate,mortgage_rate,synthetic_region_index",
-                    macro_data=data_dir / "economic_indicators.csv",
-                    area_lookup=data_dir / "area_lookup.csv",
-                    forecast_csv=data_dir / "future_economic_inputs.csv",
+                    data=source_path,
                     output_dir=output,
-                    train_fraction=0.8,
+                    train_fraction=0.7,
+                    validation_fraction=0.15,
                 )
             )
-            self.assertEqual(summary["future_prediction_rows"], 30)
-            self.assertTrue((output / "future_predictions.csv").is_file())
-            self.assertTrue((output / "dashboard.html").is_file())
 
-    def test_models_reports_database_and_forecasts(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            data_dir = root / "data"
-            generate_sample_data(data_dir, periods=36)
-            data = pd.read_csv(data_dir / "housing.csv", parse_dates=["date"])
-            features = ["inflation_rate", "mortgage_rate", "unemployment_rate"]
-            prepared = prepare_data(data, "date", "price", features)
-            results = evaluate_models(
-                prepared, "date", "price", features, importance_repeats=2
+            self.assertEqual(summary["dataset_name"], DATASET_NAME)
+            self.assertEqual(summary["metro_count"], 3)
+            self.assertLess(
+                summary["training_end"], summary["validation_start"]
             )
-            output = root / "outputs"
-            summary = save_results(results, "date", "price", features, output)
+            self.assertLess(summary["validation_end"], summary["test_start"])
+            self.assertEqual(
+                summary["training_rows"]
+                + summary["validation_rows"]
+                + summary["test_rows"],
+                summary["modeling_rows"],
+            )
 
+            comparison = pd.read_csv(output / "model_comparison.csv")
             self.assertEqual(
-                set(results["comparison"]["model"]),
-                {"Linear regression", "Random forest", "Gradient boosting"},
+                set(comparison["model"]),
+                {
+                    "Linear regression",
+                    "Random forest",
+                    "Gradient boosting",
+                    *BASELINE_NAMES,
+                },
             )
-            self.assertEqual(len(results["importance"]), len(features))
-            self.assertEqual(
-                list(results["comparison"].columns), ["model", "mae", "rmse", "r2"]
+            self.assertIn(
+                summary["best_model_by_validation_mae"], set(comparison["model"])
             )
-            self.assertEqual(
-                len(
-                    [
-                        column
-                        for column in results["holdout"].columns
-                        if column.endswith(" prediction")
-                    ]
-                ),
-                3,
-            )
-            self.assertLess(results["train"]["date"].max(), results["test"]["date"].min())
-            self.assertEqual(summary["best_model_by_mae"], results["comparison"].iloc[0]["model"])
-            self.assertEqual(
-                summary["training_rows"] + summary["holdout_rows"], len(prepared)
-            )
-            self.assertTrue((output / "model_comparison.csv").is_file())
-            for chart_name in (
-                "holdout_predictions.svg",
+            self.assertEqual(list(comparison.columns), ["model", "mae", "rmse", "r2"])
+            validation = pd.read_csv(output / "validation_comparison.csv")
+            self.assertEqual(len(validation), 5)
+            predictions = pd.read_csv(output / "holdout_predictions.csv")
+            self.assertTrue({"RegionName", "StateName", "Date", "HomeValue"}.issubset(
+                predictions.columns
+            ))
+            self.assertGreater(len(predictions), 0)
+            self.assertIn("Selected by validation MAE", (output / "dashboard.html").read_text())
+            self.assertIn(DATASET_NAME, (output / "dashboard.html").read_text())
+            for name in (
                 "model_comparison.svg",
+                "holdout_predictions.svg",
                 "price_distribution.svg",
                 "predicted_vs_actual.svg",
                 "factor_importance.svg",
             ):
-                chart = output / "charts" / chart_name
-                self.assertTrue(chart.is_file(), chart_name)
-                ElementTree.parse(chart)
-            self.assertTrue((output / "charts" / "factor_importance.svg").is_file())
-            self.assertTrue((output / "dashboard.html").is_file())
-            with closing(sqlite3.connect(output / "housing_analysis.sqlite")) as connection:
-                count = connection.execute("SELECT COUNT(*) FROM model_metrics").fetchone()[0]
-            self.assertEqual(count, 3)
+                ElementTree.parse(output / "charts" / name)
 
-            future = pd.read_csv(data_dir / "future_economic_inputs.csv")
-            predicted = results["best_model"].predict(future[features])
-            self.assertEqual(len(predicted), len(future))
-            self.assertTrue(pd.Series(predicted).notna().all())
+            with closing(sqlite3.connect(output / "housing_analysis.sqlite")) as db:
+                tables = {
+                    row[0]
+                    for row in db.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    )
+                }
+                self.assertTrue(
+                    {
+                        "model_metrics",
+                        "validation_metrics",
+                        "holdout_predictions",
+                        "factor_importance",
+                        "run_metadata",
+                    }.issubset(tables)
+                )
+
+    def test_model_selection_uses_validation_not_test_scores(self) -> None:
+        prepared = prepare_data(load_zhvi_csv_from_frame(make_wide_zhvi()))
+        results = evaluate_models(prepared, importance_repeats=2)
+        self.assertEqual(
+            results["best_model_name"],
+            results["validation_comparison"].iloc[0]["model"],
+        )
+        self.assertLess(
+            results["train"][DATE_COLUMN].max(),
+            results["validation"][DATE_COLUMN].min(),
+        )
+        self.assertLess(
+            results["validation"][DATE_COLUMN].max(),
+            results["test"][DATE_COLUMN].min(),
+        )
+        self.assertEqual(len(results["comparison"]), 5)
+
+    def test_missing_real_csv_does_not_fall_back_to_generated_data(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(FileNotFoundError, "Zillow data file not found"):
+                execute(
+                    Namespace(
+                        data=root / "missing.csv",
+                        output_dir=root / "outputs",
+                        train_fraction=0.7,
+                        validation_fraction=0.15,
+                    )
+                )
+            self.assertFalse((root / "outputs").exists())
 
 
 if __name__ == "__main__":

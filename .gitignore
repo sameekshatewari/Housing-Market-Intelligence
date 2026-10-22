@@ -1,0 +1,22 @@
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.env.*
+!.env.example
+credentials.*
+secrets.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Downloaded source data and generated reports can be large or user-specific.
+data/*
+!data/.gitkeep
+outputs/*
+!outputs/.gitkeep

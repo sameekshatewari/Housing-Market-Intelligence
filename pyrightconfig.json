@@ -1,0 +1,4 @@
+{
+  "include": ["src", "tests", "*.py"],
+  "extraPaths": ["src"]
+}

@@ -73,8 +73,18 @@ validation MAE is selected. Every candidate is then evaluated on the same later
 test period; the test scores are not used to select a model. MAE and RMSE are
 reported in ZHVI value units. R-squared compares predictions with a constant
 mean-value reference, may be negative, and is **not** the seasonal-naive
-forecasting baseline. Because scores pool metro-month rows, they should be
-interpreted alongside the geographic coverage and this evaluation design.
+forecasting baseline. A validation-only report also ranks metro markets by
+the selected model's MAE and compares it with both naive baselines.
+
+The metro report includes **WAPE** (weighted absolute percentage error):
+`100 × sum(|actual − predicted|) / sum(|actual|)`. It summarizes absolute
+error relative to total observed value, avoiding unstable per-row percentages
+when an individual observation is close to zero. WAPE is left blank if a
+market's total absolute actual value is at most one target unit. WAPE is still
+scale-weighted across months within a market; it does not show the distribution
+of monthly percentage errors and should be read with MAE/RMSE. Because pooled
+scores combine metros and months, they should be interpreted alongside the
+geographic coverage and this evaluation design.
 
 The dashboard's dated forecast chart shows the **unweighted mean across
 metros** for each month, not a population-weighted national index. Feature
@@ -140,6 +150,9 @@ Generated results go into the ignored `outputs` directory:
 
 - `model_comparison.csv` — final test MAE, RMSE, and R-squared for every model.
 - `validation_comparison.csv` — validation scores used to select the model.
+- `validation_errors_by_metro.csv` — validation-only MAE, RMSE, and WAPE by
+  market for the selected model and both naive baselines, ranked by selected
+  model MAE.
 - `holdout_predictions.csv` — each metro's actual and predicted test values.
 - `factor_importance.csv` — validation permutation importance if a learned
   model was selected; empty for naive baselines.

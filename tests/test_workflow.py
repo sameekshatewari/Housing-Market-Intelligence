@@ -26,6 +26,10 @@ from housing_market_intelligence.preprocessing import (
     load_zhvi_csv,
     prepare_data,
 )
+from housing_market_intelligence.reports import (
+    calculate_wape_percent,
+    make_market_error_report,
+)
 
 
 def make_wide_zhvi(months: int = 48) -> pd.DataFrame:
@@ -207,8 +211,38 @@ class ForecastWorkflowTests(unittest.TestCase):
                 predictions.columns
             ))
             self.assertGreater(len(predictions), 0)
+            market_errors = pd.read_csv(output / "validation_errors_by_metro.csv")
+            self.assertEqual(len(market_errors), 3)
+            self.assertEqual(
+                set(market_errors["selected_model"]),
+                {summary["best_model_by_validation_mae"]},
+            )
+            self.assertEqual(
+                market_errors["selected_model_mae"].tolist(),
+                sorted(market_errors["selected_model_mae"], reverse=True),
+            )
+            self.assertTrue(
+                {
+                    "persistence_mae",
+                    "persistence_rmse",
+                    "persistence_wape_percent",
+                    "seasonal_naive_mae",
+                    "seasonal_naive_rmse",
+                    "seasonal_naive_wape_percent",
+                    "selected_model_wape_percent",
+                    "validation_start",
+                    "validation_end",
+                }.issubset(market_errors.columns)
+            )
+            self.assertEqual(
+                set(market_errors["validation_start"]),
+                {summary["validation_start"]},
+            )
             self.assertIn("Selected by validation MAE", (output / "dashboard.html").read_text())
             self.assertIn(DATASET_NAME, (output / "dashboard.html").read_text())
+            dashboard = (output / "dashboard.html").read_text()
+            self.assertIn("Markets with highest validation error", dashboard)
+            self.assertIn("WAPE is total absolute error", dashboard)
             for name in (
                 "model_comparison.svg",
                 "holdout_predictions.svg",
@@ -217,6 +251,35 @@ class ForecastWorkflowTests(unittest.TestCase):
                 "factor_importance.svg",
             ):
                 ElementTree.parse(output / "charts" / name)
+
+            chart_root = ElementTree.parse(
+                output / "charts" / "holdout_predictions.svg"
+            ).getroot()
+            namespace = {"svg": "http://www.w3.org/2000/svg"}
+            chart_lines = chart_root.findall(".//svg:polyline", namespace)
+            self.assertEqual(len(chart_lines), 4)
+            series_by_column = {
+                line.attrib["data-series"]: line.attrib["stroke"]
+                for line in chart_lines
+            }
+            self.assertEqual(
+                set(series_by_column),
+                {
+                    "HomeValue",
+                    f"{summary['best_model_by_validation_mae']} prediction",
+                    f"{BASELINE_NAMES[0]} prediction",
+                    f"{BASELINE_NAMES[1]} prediction",
+                },
+            )
+            self.assertEqual(len(set(series_by_column.values())), 4)
+            chart_text = " ".join(
+                node.text or ""
+                for node in chart_root.findall(".//svg:text", namespace)
+            )
+            self.assertIn("Actual unweighted metro mean", chart_text)
+            self.assertIn("selected by validation MAE", chart_text)
+            self.assertIn(BASELINE_NAMES[0], chart_text)
+            self.assertIn(BASELINE_NAMES[1], chart_text)
 
             with closing(sqlite3.connect(output / "housing_analysis.sqlite")) as db:
                 tables = {
@@ -229,11 +292,41 @@ class ForecastWorkflowTests(unittest.TestCase):
                     {
                         "model_metrics",
                         "validation_metrics",
+                        "validation_metro_metrics",
                         "holdout_predictions",
                         "factor_importance",
                         "run_metadata",
                     }.issubset(tables)
                 )
+
+    def test_market_error_report_uses_validation_predictions_and_ranks_by_mae(self) -> None:
+        prepared = prepare_data(load_zhvi_csv_from_frame(make_wide_zhvi()))
+        results = evaluate_models(prepared, importance_repeats=2)
+        report = make_market_error_report(
+            results["validation_predictions"], results["best_model_name"]
+        )
+
+        self.assertEqual(len(report), prepared["RegionName"].nunique())
+        self.assertTrue(
+            report["selected_model_mae"].is_monotonic_decreasing
+        )
+        self.assertTrue(
+            (report["validation_start"] == results["validation"]["Date"].min().date().isoformat()).all()
+        )
+        self.assertTrue(report["selected_model_wape_percent"].notna().all())
+
+    def test_wape_handles_zero_and_near_zero_denominators(self) -> None:
+        self.assertIsNone(
+            calculate_wape_percent(
+                pd.Series([0.0, 0.5]), pd.Series([0.0, 1.0])
+            )
+        )
+        self.assertEqual(
+            calculate_wape_percent(
+                pd.Series([100.0, 100.0]), pd.Series([90.0, 90.0])
+            ),
+            10.0,
+        )
 
     def test_model_selection_uses_validation_not_test_scores(self) -> None:
         prepared = prepare_data(load_zhvi_csv_from_frame(make_wide_zhvi()))

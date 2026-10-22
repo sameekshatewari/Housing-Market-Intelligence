@@ -92,6 +92,7 @@ def evaluate_models(
     model_builders = build_models()
     validation_scores: list[dict[str, float | str | None]] = []
     trained_on_train: dict[str, Model] = {}
+    validation_prediction_values: dict[str, Any] = {}
     x_train = train[FORECAST_FEATURES]
     y_train = train[target_column]
     x_validation = validation[FORECAST_FEATURES]
@@ -101,16 +102,28 @@ def evaluate_models(
         model.fit(x_train, y_train)
         predicted = model.predict(x_validation)
         trained_on_train[name] = model
+        validation_prediction_values[name] = predicted
         validation_scores.append(_metrics(name, y_validation, predicted))
 
     for name in BASELINE_NAMES:
         predicted = _predictions(name, validation)
+        validation_prediction_values[name] = predicted
         validation_scores.append(_metrics(name, y_validation, predicted))
 
     validation_comparison = (
         pd.DataFrame(validation_scores).sort_values("mae").reset_index(drop=True)
     )
     best_model_name = str(validation_comparison.loc[0, "model"])
+
+    validation_context = [
+        column
+        for column in ("RegionName", "StateName")
+        if column in validation.columns
+    ]
+    validation_predictions = validation[[date_column] + validation_context].copy()
+    validation_predictions[target_column] = validation[target_column].to_numpy()
+    for name in (best_model_name, *BASELINE_NAMES):
+        validation_predictions[f"{name} prediction"] = validation_prediction_values[name]
 
     holdout_columns = [
         column
@@ -162,6 +175,7 @@ def evaluate_models(
     return {
         "comparison": comparison,
         "validation_comparison": validation_comparison,
+        "validation_predictions": validation_predictions,
         "holdout": test_predictions,
         "importance": importance,
         "best_model_name": best_model_name,

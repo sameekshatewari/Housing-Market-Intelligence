@@ -1,77 +1,70 @@
 # Understanding the Program
 
-## What this project does
+## What the project analyzes
 
-The program prepares housing-price observations and economic predictors,
-compares three regression approaches on later-in-time observations, describes
-predictor usefulness, and can apply the winning model to later rows with known
-economic inputs. Sample data included in this repository is generated and
-fictional; it is intended to make the example runnable without external files.
+The program compares forecasts of Zillow's metro-level ZHVI: middle-tier,
+all-homes, seasonally adjusted monthly values. ZHVI is a modeled estimate of
+typical home value, not an individual-home sale-price dataset.
 
-## Preparation and temporal evaluation
+Download the CSV from the
+[Zillow Research Data page](https://www.zillow.com/research/data/) and save it
+as `data\zhvi_metro.csv`. The root [README](../README.md) lists the exact
+download settings and run commands. No data file is bundled; the program stops
+if the local file is missing or does not have the expected Zillow format.
 
-Housing and optional macroeconomic tables join by date. Optional market
-metadata joins by `area_id`. Rows without a usable date or target are dropped;
-predictor columns are converted to numeric values, and missing predictor values
-are imputed as part of each model pipeline.
+## Cleaning and features
 
-The default split uses the earliest 80% of distinct dates to train and the
-latest 20% to hold out. All rows with the same date stay on one side. This
-better represents forecasting later periods than a random split, though a
-single holdout interval is not a complete evaluation across regions or market
-cycles.
+The source CSV is wide: location fields identify each metro, and each
+`YYYY-MM-DD` column contains that month's ZHVI. The loader keeps rows marked
+`RegionType=msa` or `metro` and melts available date columns into a tidy table
+with `RegionName`, `StateName`, `Date`, and `HomeValue`.
 
-## Compared models
+Blank or non-numeric monthly values are treated as missing and removed. They
+are not filled with fabricated values. Forecast features are made separately
+inside each metro: values from 1, 3, 6, and 12 months earlier; year-over-year
+growth calculated from those past values; and seasonal month indicators.
+Rows without all required history are omitted.
 
-- **Linear regression:** an interpretable linear baseline.
-- **Random forest:** an ensemble of decision trees that can model nonlinear
-  relationships.
-- **Gradient boosting:** a sequence of shallow decision trees that each
-  correct errors from the current ensemble.
+## Forecasting models and fair comparison
 
-The table reports:
+- **Persistence** predicts the previous month's value.
+- **Seasonal naive** predicts the value from 12 months earlier.
+- **Linear regression** provides a compact linear model.
+- **Random forest** averages decision trees.
+- **Gradient boosting** combines shallow trees fitted in sequence.
 
-- **MAE:** average absolute price error, in the target's units.
-- **RMSE:** square-rooted average squared error; larger misses are penalized
-  more strongly.
-- **R-squared:** performance relative to predicting the holdout average. It
-  may be negative if a model performs worse than that baseline.
+The default split uses the earliest 70% of distinct months for training, the
+next 15% for validation, and the final 15% for testing. All markets from a
+month stay together. Lowest validation MAE selects the model. Every approach
+is then scored on the same final test dates, which are not used for selection.
 
-The lowest holdout MAE selects the model for subsequent predictions. Because
-the same holdout is used for model selection and interpretation, compare
-results as exploratory evidence rather than an untouched final benchmark.
+Evaluation is rolling one month ahead: once a month has been observed, it can
+contribute to a later month's lag. This does not measure a fixed forecast of
+many months made all at once. The model is evaluated across pooled
+metro-months, so performance can differ across markets and periods.
 
-## Factor importance and causal limits
+The metrics mean:
 
-Permutation importance measures how the selected model's holdout MAE changes
-when one input feature is shuffled. A positive score means the shuffle
-increased error; a negative score means it decreased error for these data.
-Importance is about predictive association in this particular sample, not
-causal influence. Correlated economic variables can share or distort
-importance.
+- **MAE:** mean absolute error in ZHVI value units.
+- **RMSE:** square root of mean squared error; large errors contribute more.
+- **R-squared:** improvement relative to a constant mean-value prediction. It
+  can be negative and is not the seasonal-naive forecast.
 
-## Future predictions
+## Charts and explanation
 
-When `--forecast-csv` is supplied, the chosen model is refit using all
-historical data and predicts the rows in that file. Every selected predictor
-must already have a value for each future date. The program does not generate
-future inflation, mortgage, fuel, or unemployment assumptions; users must
-provide them.
+The dashboard includes validation and final test tables, predicted-vs-actual
+values, a forecast time chart, and (when a learned model wins validation)
+permutation importance. The time chart shows an unweighted mean over metro
+values, not a population-weighted national index. Permutation importance
+measures whether shuffling a feature changes prediction error; it does not
+show that the feature caused a housing-value change.
 
-## Try it
-
-```powershell
-python .\housing_market_intelligence.py --data .\data\housing.csv --date-column date --target-column price --features inflation_rate,mortgage_rate,unemployment_rate,fuel_price,interest_rate,synthetic_region_index --forecast-csv .\data\future_economic_inputs.csv
-```
-
-To use the desktop interface instead:
+## Run and test
 
 ```powershell
-python .\launch_gui.py
-```
-
-To validate the workflow with automated tests:
-
-```powershell
+python .\housing_market_intelligence.py
 python -m unittest discover -s tests -v
 ```
+
+The test suite uses small in-memory examples shaped like the Zillow file; real
+data is optional for running tests but necessary for real-market outputs.
